@@ -1,0 +1,15 @@
+{
+  "name": "coop-tetris",
+  "version": "1.0.0",
+  "description": "Multiplayer tetris",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "tomster12",
+  "license": "ISC",
+  "dependencies": {
+    "socketio": "^1.0.0"
+  }
+}

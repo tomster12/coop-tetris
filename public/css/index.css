@@ -1,0 +1,22 @@
+
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0px;
+  padding: 0px;
+}
+
+
+#main {
+  /* Other */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  /* Position and size */
+  width: 100%;
+  height: 100%;
+
+  /* Visual */
+  background-color: rgb(94, 94, 94);
+}
