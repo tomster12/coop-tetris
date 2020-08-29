@@ -27,6 +27,7 @@ let cfg = {
   get mainFont() { return this._current.mainFont; },
   get mainColor() { return this._current.mainColor; },
   get hoverColor() { return this._current.hoverColor; },
+  get pieceColors() { return this._current.pieceColors; },
   get bloomRange() { return this._current.bloomRange; },
   get bloomStrength() { return this._current.bloomStrength; },
 
@@ -71,7 +72,7 @@ let cfg = {
     mainColor: "#d13ee9",
     hoverColor: "#ec7aff",
     bloomRange: 0.6,
-    bloomStrength: 0.6
+    bloomStrength: 0.8
   },
 
   // Neon blue

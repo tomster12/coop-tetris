@@ -5,7 +5,7 @@
 let http = require("http");
 let path = require("path");
 let fs = require("fs");
-let sock = require("socket.io");
+let socketio = require("socket.io");
 
 // #endregion
 
@@ -47,9 +47,11 @@ console.log("Server started at http://localhost:3000/");
 // #region - Socket IO
 
 // Initialize server
-const io = sock.listen(server);
+const io = socketio.listen(server);
 io.sockets.on("connection", (socket) => {
     console.log("Client connected: " + socket.id);
+    socketInfo[socket.id] = {};
+
 
     // Host request
     socket.on("requestHost", () => { requestHost(socket); });
@@ -63,9 +65,22 @@ io.sockets.on("connection", (socket) => {
     // Game list Request
     socket.on("getGameList", () => { getGameList(socket); });
 
+
+    // Player ready up
+    socket.on("game::readyUp", () => { currentGames[socketInfo[socket.id].currentGame].playerReadyUp(socket.id); });
+
+
     // Client disconnect
     socket.on("disconnect", () => {
       console.log("Client disconnected: " + socket.id);
+
+      // Remove from current game
+      if (socketInfo[socket.id].currentGame != null) {
+        requestLeave(socket, { id: socketInfo[socket.id].currentGame });
+      }
+
+      // Delete info
+      delete socketInfo[socket.id];
     });
   }
 );
@@ -76,15 +91,16 @@ io.sockets.on("connection", (socket) => {
 // #region - Tetris
 
 // Initialize variables
+let socketInfo = {};
 let nextGameID = 0;
-let tetrisGames = {};
+let currentGames = {};
 
 
 function requestHost(socket) {
   // Create a new tetris game
   console.log("Creating new game with ID: " + nextGameID);
   let newGame = new TetrisGame(nextGameID);
-  tetrisGames[nextGameID] = newGame;
+  currentGames[nextGameID] = newGame;
   socket.emit("requestHost", { id: nextGameID++, accepted: true });
   getGameList(io);
 }
@@ -94,11 +110,12 @@ async function requestJoin(socket, data) {
   await sleep(500);
 
   // Game exists
-  if (tetrisGames[data.id]) {
+  if (currentGames[data.id]) {
     console.log(socket.id + " requests join game " + data.id + ": accepted");
-    tetrisGames[data.id].addPlayer(socket.id);
+    socketInfo[socket.id].currentGame = data.id;
+    currentGames[data.id].addPlayer(socket.id);
     getGameList(io);
-    socket.emit("requestJoin", { id: data.id, accepted: true });
+    socket.emit("requestJoin", { id: data.id, accepted: true, config: currentGames[data.id].config });
 
   // Game doesnt exist
   } else {
@@ -110,9 +127,10 @@ async function requestJoin(socket, data) {
 
 function requestLeave(socket, data) {
   // Game exists
-  if (tetrisGames[data.id]) {
+  if (currentGames[data.id]) {
     console.log(socket.id + " requests leave game " + data.id + ": accepted");
-    tetrisGames[data.id].removePlayer(socket.id);
+    socketInfo[socket.id].currentGame = null;
+    currentGames[data.id].removePlayer(socket.id);
     getGameList(io);
     socket.emit("requestLeave", { id: data.id, accepted: true });
 
@@ -126,7 +144,7 @@ function requestLeave(socket, data) {
 
 function getGameList(target) {
   // Send a list of available games to the target
-  let games = Object.values(tetrisGames).map(g => {
+  let games = Object.values(currentGames).map(g => {
     return { id: g.id, playerCount: g.players.length }
   });
   target.emit("getGameList", games);
@@ -136,8 +154,8 @@ function getGameList(target) {
 function removeGame(id) {
   // Remove the specified game
   console.log("Deleting game with id: " + id);
-  if (tetrisGames[id])
-    delete tetrisGames[id];
+  if (currentGames[id])
+    delete currentGames[id];
   getGameList(io);
 }
 
@@ -161,7 +179,12 @@ class TetrisGame {
   constructor(id_) {
     // Initialize variables
     this.id = id_;
-    this.players = [];
+    this.running = false;
+    this.config = {
+      gameMode: "standard",
+      boardSize: { x: 10, y: 24 },
+      queueLength: 5 };
+    this.players = {};
   }
 
   // #endregion
@@ -169,18 +192,46 @@ class TetrisGame {
 
   // #region - Main
 
+  playerReadyUp(id) {
+    // Ready up the player
+    this.players[id].ready = true;
+
+    // DEBUG count ready players
+    let players = this.getPlayers();
+    let count = players.reduce((acc, p) => (acc + (p.ready ? 1 : 0)));
+    this.emitToPlayers("game::debugNumber", count);
+  }
+
+
   addPlayer(id) {
     // New player joined
-    this.players.push({ id: id });
+    this.players[id] = {
+      id : id,
+      ready: false
+    };
   }
 
 
   removePlayer(id) {
     // Player wants to leave
-    this.players.splice(this.players.findIndex(v => v.id == id), 1);
+    if (this.players[id]) delete this.players[id];
 
     // Delete if no players
-    if (this.players.length == 0) removeGame(this.id);
+    if (Object.keys(this.players).length == 0) removeGame(this.id);
+  }
+
+
+  getPlayers() {
+    // Returns a list of players
+    return Object.values(this.players);
+  }
+
+
+  emitToPlayers(evt_, data_) {
+    // Emit an event to all players
+    for (let player of Object.keys(this.players)) {
+      io.to(player).emit(evt_, data_);
+    }
   }
 
   // #endregion

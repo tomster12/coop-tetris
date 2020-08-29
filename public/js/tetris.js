@@ -106,9 +106,10 @@ class MenuState extends State {
     // Setup option config
     this.opCfg = {
       scrollPos: 0, scrollVel: 0,
-      border: { left: 50, top: 50, right: 50, bottom: 50 } };
-    this.opCfg.size = { x: width - this.opCfg.border.left - this.opCfg.border.right, y: 80 };
-    this.opCfg.indexLimit = (height - this.opCfg.border.top - this.opCfg.border.bottom) / (1.2 * this.opCfg.size.y);
+      pos: { x: 50, y: 50 },
+      size: { x: width - 100, y: height - 100 } };
+    this.opCfg.opSize = { x: width - 100, y: 80 };
+    this.opCfg.indexLimit = (height - this.opCfg.size.y) / (1.2 * this.opCfg.opSize.y);
 
     // Initial setup
     this.options.push(new HostOption(this, this.opCfg));
@@ -118,13 +119,6 @@ class MenuState extends State {
 
   _subscribeEventListeners() {
     super._subscribeEventListeners();
-
-    // Accepted host request
-    this._subscribe(socket, "requestHost", (data) => {
-      if (data.accepted) {
-        this.joinGame(data.id);
-      }
-    });
 
     // Received game list
     this._subscribe(socket, "getGameList", (data) => {
@@ -160,11 +154,11 @@ class MenuState extends State {
     for (let i = 0; i < this.options.length; i++)
       this.options[i].draw(output, i - this.opCfg.scrollPos, this.opCfg);
     output.noStroke();
-    output.fill(output.get(this.opCfg.border.left, 0));
-    output.rect(this.opCfg.border.left, 0,
-      width - this.opCfg.border.left - this.opCfg.border.right, this.opCfg.border.top );
-    output.rect(this.opCfg.border.left, height - this.opCfg.border.bottom,
-      width - this.opCfg.border.left - this.opCfg.border.right, this.opCfg.border.bottom );
+    output.fill(output.get(this.opCfg.pos.x, this.opCfg.pos.y));
+    output.rect(this.opCfg.pos.x, 0,
+      width - this.opCfg.size.x, this.opCfg.pos.y );
+    output.rect(this.opCfg.pos.x, this.opCfg.pos.y + this.opCfg.size.y,
+      width - this.opCfg.size.x, height - this.opCfg.size.y - this.opCfg.pos.y );
   }
 
 
@@ -176,12 +170,30 @@ class MenuState extends State {
       // Accepted into game
       if (data.accepted) {
         this._tetris.popState();
-        this._tetris.pushState(new GameState(this._tetris, data.id));
+        this._tetris.pushState(new GameState(this._tetris, data.id, data.config));
 
       // Denied from game
       } else {
         this._tetris.popState();
         console.log("Join game unsuccessful: " + data.reason);
+      }
+    }));
+  }
+
+
+  hostGame() {
+    socket.emit("requestHost");
+    this._tetris.pushState(new LoadState(this._tetris, "requestHost", (data) => {
+
+      // Host accepted
+      if (data.accepted) {
+        this._tetris.popState();
+        this.joinGame(data.id);
+
+      // Host denied
+      } else {
+        this._tetris.popState();
+        console.log("Host unsuccessful: " + data.reason);
       }
     }));
   }
@@ -196,9 +208,9 @@ class MenuOption {
 
   constructor(menu_, opCfg) {
     // Initialize variables
-    this.menu = menu_;
+    this._menu = menu_;
     this.hovered = false;
-    this.size = { x: opCfg.size.x, y: opCfg.size.y };
+    this.size = { x: opCfg.opSize.x, y: opCfg.opSize.y };
   }
 
   // #endregion
@@ -209,8 +221,8 @@ class MenuOption {
   draw(output, index, opCfg) {
     // Update position and size
     this.pos = {
-      x: opCfg.border.left,
-      y: opCfg.border.top + (0.2 + index * 1.2) * opCfg.size.y };
+      x: opCfg.pos.x,
+      y: opCfg.pos.y + (0.2 + index * 1.2) * opCfg.opSize.y };
 
     // Update hovered
     this.hovered = mouseX > this.pos.x
@@ -269,7 +281,7 @@ class GameOption extends MenuOption {
 
   click() {
     // Send host request to server
-    this.menu.joinGame(this.id);
+    this._menu.joinGame(this.id);
   }
 
   // #endregion
@@ -302,7 +314,7 @@ class HostOption extends MenuOption {
 
   click() {
     // Send host request to server
-    socket.emit("requestHost");
+    this._menu.hostGame();
   }
 
   // #endregion
@@ -313,11 +325,11 @@ class LoadState extends State {
 
   // #region - Setup
 
-  constructor(tetris_, event_, response_) {
+  constructor(tetris_, evt_, response_) {
     super(tetris_);
 
     // Recieved response
-    this._subscribe(socket, event_, response_);
+    this._subscribe(socket, evt_, response_);
   }
 
   // #endregion
@@ -342,11 +354,53 @@ class GameState extends State {
 
   // #region - Setup
 
-  constructor(tetris_, id_) {
+  constructor(tetris_, id_, config_) {
     super(tetris_);
 
     // Initialize variables
-    this.id = id_;
+    this._id = id_;
+    this._config = config_;
+    this.running = false;
+    this.tetronimos = [];
+    this._boardPos = { x: 50, y: 50 };
+    this._boardSize = { x: 0, y: height - 100 };
+    this._queuePos = { x: width - 130, y: 50 };
+    this._queueSize = { x: 80, y: 0 };
+
+    // Initial setup
+    this._setupBoard();
+  }
+
+
+  _setupBoard() {
+    // Setup board using this._config
+    this._board = [];
+    this._cellSize = this._boardSize.y / this._config.boardSize.y;
+    this._boardSize.x = this._config.boardSize.x * this._cellSize;
+    this._queueSize.y = this._queueSize.x * this._config.queueLength;
+    for (let y = 0; y < this._config.boardSize.y; y++) {
+      this._board.push([]);
+      for (let x = 0; x < this._config.boardSize.x; x++) {
+        this._board[y].push(null);
+      }
+    }
+
+    // Debug setup
+    this._debugNumber = 0;
+    this._board[2][2] = color("#cf7b24");
+    this._board[3][2] = color("#cf7b24");
+    this._board[4][2] = color("#cf7b24");
+    this._board[4][3] = color("#cf7b24");
+  }
+
+
+  _subscribeEventListeners() {
+    super._subscribeEventListeners();
+
+    // Received debug number
+    this._subscribe(socket, "game::debugNumber", (data) => {
+      this._debugNumber = data;
+    });
   }
 
   // #endregion
@@ -357,12 +411,50 @@ class GameState extends State {
   draw(output) {
     // Enter game state
     if (input.keys.clicked[27]) this.leaveGame();
+
+    // Draw board
+    this._drawBoard(output);
+
+    // Draw debug number
+    output.noStroke();
+    output.fill(255);
+    output.textSize(20);
+    output.text(this._debugNumber, width * 0.5, height * 0.5);
+  }
+
+
+  _drawBoard(output) {
+    // Draw cells
+    output.noStroke();
+    for (let y = 0; y < this._config.boardSize.y; y++) {
+      for (let x = 0; x < this._config.boardSize.x; x++) {
+        let val = this._board[y][x];
+        if (val != null) {
+          output.fill(val);
+          output.rect(
+            this._boardPos.x + x * this._cellSize,
+            this._boardPos.y + y * this._cellSize,
+            this._cellSize, this._cellSize
+          );
+        }
+      }
+    }
+
+    // Draw the board and queue outlines
+    output.strokeWeight(2);
+    output.stroke(cfg.mainColor);
+    output.noFill();
+    output.rect(this._boardPos.x, this._boardPos.y,
+      this._boardSize.x, this._boardSize.y);
+    output.rect(this._queuePos.x, this._queuePos.y,
+      this._queueSize.x, this._queueSize.y);
+    output.strokeWeight(1);
   }
 
 
   leaveGame() {
     // Leave the current game
-    socket.emit("requestLeave", { id: this.id });
+    socket.emit("requestLeave", { id: this._id });
     this._tetris.popState();
 
     // Send a request to join a game and load
