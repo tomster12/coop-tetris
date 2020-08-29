@@ -16,12 +16,19 @@ class Tetris {
 
   // #region - Main
 
-  draw() {
-    // Clear background
-    background("#b6b6b6");
+  draw(output) {
+    // Draw background
+    output.background("#090909");
 
     // Draw current state
-    this.getState().draw();
+    this.getState().draw(output);
+
+    // Outline
+    output.noFill();
+    output.stroke(CFG.mainColor);
+    output.strokeWeight(2);
+    output.rect(0, 0, width, height);
+    output.strokeWeight(1);
   }
 
 
@@ -80,7 +87,7 @@ class State {
   }
 
 
-  draw() {}
+  draw(output) {}
 
   // #endregion
 }
@@ -136,30 +143,27 @@ class MenuState extends State {
 
   // #region - Main
 
-  draw() {
-    // Clear background
-    background("#b6b6b6");
-
+  draw(output) {
     // Draw options
-    this._drawOptions();
+    this._drawOptions(output);
   }
 
 
-  _drawOptions() {
+  _drawOptions(output) {
     // Update mouse wheel
-    this.opCfg.scrollVel += input.mouseWheel * 0.03;
+    this.opCfg.scrollVel += INPUT.mouseWheel * 0.03;
     this.opCfg.scrollPos += this.opCfg.scrollVel;
     this.opCfg.scrollVel *= 0.9;
     this.opCfg.scrollPos = constrain(this.opCfg.scrollPos, 0, 0.2 + this.options.length - this.opCfg.indexLimit);
 
     // Draw options and covers
     for (let i = 0; i < this.options.length; i++)
-      this.options[i].draw(i - this.opCfg.scrollPos, this.opCfg);
-    noStroke();
-    fill("#b6b6b6");
-    rect(this.opCfg.border.left, 0,
+      this.options[i].draw(output, i - this.opCfg.scrollPos, this.opCfg);
+    output.noStroke();
+    output.fill(output.get(this.opCfg.border.left, 0));
+    output.rect(this.opCfg.border.left, 0,
       width - this.opCfg.border.left - this.opCfg.border.right, this.opCfg.border.top );
-    rect(this.opCfg.border.left, height - this.opCfg.border.bottom,
+    output.rect(this.opCfg.border.left, height - this.opCfg.border.bottom,
       width - this.opCfg.border.left - this.opCfg.border.right, this.opCfg.border.bottom );
   }
 
@@ -189,7 +193,7 @@ class MenuOption {
 
   // #region - Main
 
-  draw(index, cfg) {
+  draw(output, index, cfg) {
     // Update pos
     this.pos = {
       x: cfg.border.left,
@@ -202,12 +206,14 @@ class MenuOption {
       && mouseY < this.pos.y + this.size.y;
 
     // CLick functions
-    if (this.hovered && input.mouse.clicked[LEFT]) this.click();
+    if (this.hovered && INPUT.mouse.clicked[LEFT]) this.click();
 
     // Show option
-    if (!this.hovered) { noStroke(); fill("#969696");
-    } else { stroke("#444343"); fill("#858585"); }
-    rect(this.pos.x, this.pos.y, this.size.x, this.size.y);
+    output.noFill();
+    if (!this.hovered) { output.stroke(CFG.mainColor); output.strokeWeight(2);
+    } else { output.stroke(CFG.hoverColor); output.strokeWeight(3); }
+    output.rect(this.pos.x, this.pos.y, this.size.x, this.size.y);
+    output.strokeWeight(1);
   }
 
 
@@ -234,17 +240,17 @@ class GameOption extends MenuOption {
 
   // #region - Main
 
-  draw(index, cfg) {
-    super.draw(index, cfg);
+  draw(output, index, cfg) {
+    super.draw(output, index, cfg);
 
     // Show id and playerCount
-    textSize(this.size.y * 0.3);
-    noStroke();
-    fill("#3d3d3d");
-    textAlign(LEFT);
-    text("Server ID: " + this.id, this.pos.x + 50, this.pos.y + this.size.y * 0.65);
-    textAlign(RIGHT);
-    text(this.playerCount + " Players", this.pos.x + this.size.x - 50, this.pos.y + this.size.y * 0.65);
+    output.textSize(this.size.y * 0.3);
+    output.noStroke();
+    output.fill(CFG.mainColor);
+    output.textAlign(LEFT);
+    output.text("Server ID: " + this.id, this.pos.x + 50, this.pos.y + this.size.y * 0.65);
+    output.textAlign(RIGHT);
+    output.text(this.playerCount + " Players", this.pos.x + this.size.x - 50, this.pos.y + this.size.y * 0.65);
   }
 
 
@@ -270,14 +276,15 @@ class HostOption extends MenuOption {
 
   // #region - Main
 
-  draw(index, cfg) {
-    super.draw(index, cfg);
+  draw(output, index, cfg) {
+    super.draw(output, index, cfg);
 
     // Draw plus
-    noStroke();
-    fill("#3d3d3d");
-    rect(this.pos.x + this.size.x * 0.5 - 5, this.pos.y + this.size.y * 0.5 - 20, 10, 40);
-    rect(this.pos.x + this.size.x * 0.5 - 20, this.pos.y + this.size.y * 0.5 - 5, 40, 10);
+
+    output.noStroke();
+    output.fill(CFG.mainColor);
+    output.rect(this.pos.x + this.size.x * 0.5 - 5, this.pos.y + this.size.y * 0.5 - 20, 10, 40);
+    output.rect(this.pos.x + this.size.x * 0.5 - 20, this.pos.y + this.size.y * 0.5 - 5, 40, 10);
   }
 
 
@@ -321,16 +328,13 @@ class LoadGameState extends State {
 
   // #region - Main
 
-  draw() {
-    // Clear background
-    background("#b6b6b6");
-
+  draw(output) {
     // Show loading text
-    textAlign(CENTER);
-    textSize(40);
-    noStroke();
-    fill("#3d3d3d");
-    text("Loading...", width * 0.5, height * 0.5);
+    output.textAlign(CENTER);
+    output.textSize(60);
+    output.noStroke();
+    output.fill(CFG.mainColor);
+    output.text("Loading...", width * 0.5, height * 0.5);
   }
 
   // #endregion
@@ -353,12 +357,9 @@ class GameState extends State {
 
   // #region - Main
 
-  draw() {
-    // Clear background
-    background("#b6b6b6");
-
+  draw(output) {
     // Enter game state
-    if (input.keys.clicked[27]) this.leaveGame();
+    if (INPUT.keys.clicked[27]) this.leaveGame();
   }
 
 
