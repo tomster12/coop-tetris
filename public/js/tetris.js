@@ -25,7 +25,7 @@ class Tetris {
 
     // Outline
     output.noFill();
-    output.stroke(CFG.mainColor);
+    output.stroke(cfg.mainColor);
     output.strokeWeight(2);
     output.rect(0, 0, width, height);
     output.strokeWeight(1);
@@ -60,7 +60,7 @@ class State {
 
   constructor(tetris_) {
     // Initialize variables
-    this.tetris = tetris_;
+    this._tetris = tetris_;
     this._subscribeEventListeners();
   }
 
@@ -73,17 +73,17 @@ class State {
 
   _subscribeEventListeners() {
     // Initialize variables
-    this.listeners = [];
-    this.subscribe = (sock, e, func) => { sock.on(e, func); this.listeners.push({ sock, e, func }); };
+    this._listeners = [];
+    this._subscribe = (sock, e, func) => { sock.on(e, func); this._listeners.push({ sock, e, func }); };
   }
 
 
   _unsubscribeEventListeners() {
     // Initialize variables
-    this.unsubscribe = ({ sock, e, func }) => { sock.off(e, func); };
+    this._unsubscribe = ({ sock, e, func }) => { sock.off(e, func); };
 
     // Unsubscribe all listeners
-    for (let listener of this.listeners) this.unsubscribe(listener);
+    for (let listener of this._listeners) this._unsubscribe(listener);
   }
 
 
@@ -107,7 +107,7 @@ class MenuState extends State {
     this.opCfg = {
       scrollPos: 0, scrollVel: 0,
       border: { left: 50, top: 50, right: 50, bottom: 50 } };
-    this.opCfg.size = { x: width - this.opCfg.border.left - this.opCfg.border.right, y: 80 }
+    this.opCfg.size = { x: width - this.opCfg.border.left - this.opCfg.border.right, y: 80 };
     this.opCfg.indexLimit = (height - this.opCfg.border.top - this.opCfg.border.bottom) / (1.2 * this.opCfg.size.y);
 
     // Initial setup
@@ -120,14 +120,14 @@ class MenuState extends State {
     super._subscribeEventListeners();
 
     // Accepted host request
-    this.subscribe(socket, "requestHost", (data) => {
+    this._subscribe(socket, "requestHost", (data) => {
       if (data.accepted) {
         this.joinGame(data.id);
       }
     });
 
     // Received game list
-    this.subscribe(socket, "getGameList", (data) => {
+    this._subscribe(socket, "getGameList", (data) => {
       this.options = [];
       this.options.push(new HostOption(this, this.opCfg));
 
@@ -151,7 +151,7 @@ class MenuState extends State {
 
   _drawOptions(output) {
     // Update mouse wheel
-    this.opCfg.scrollVel += INPUT.mouseWheel * 0.03;
+    this.opCfg.scrollVel += input.mouseWheel * 0.03;
     this.opCfg.scrollPos += this.opCfg.scrollVel;
     this.opCfg.scrollVel *= 0.9;
     this.opCfg.scrollPos = constrain(this.opCfg.scrollPos, 0, 0.2 + this.options.length - this.opCfg.indexLimit);
@@ -169,8 +169,21 @@ class MenuState extends State {
 
 
   joinGame(id) {
-    // Send a request to join a game
-    this.tetris.pushState(new LoadGameState(this.tetris, id));
+    // Send a request to join a game and load
+    socket.emit("requestJoin", { id: id });
+    this._tetris.pushState(new LoadState(this._tetris, "requestJoin", (data) => {
+
+      // Accepted into game
+      if (data.accepted) {
+        this._tetris.popState();
+        this._tetris.pushState(new GameState(this._tetris, data.id));
+
+      // Denied from game
+      } else {
+        this._tetris.popState();
+        console.log("Join game unsuccessful: " + data.reason);
+      }
+    }));
   }
 
   // #endregion
@@ -181,11 +194,11 @@ class MenuOption {
 
   // #region - Setup
 
-  constructor(menu_, cfg) {
+  constructor(menu_, opCfg) {
     // Initialize variables
     this.menu = menu_;
-    this.size = { x: cfg.size.x, y: cfg.size.y };
     this.hovered = false;
+    this.size = { x: opCfg.size.x, y: opCfg.size.y };
   }
 
   // #endregion
@@ -193,11 +206,11 @@ class MenuOption {
 
   // #region - Main
 
-  draw(output, index, cfg) {
-    // Update pos
+  draw(output, index, opCfg) {
+    // Update position and size
     this.pos = {
-      x: cfg.border.left,
-      y: cfg.border.top + (0.2 + index * 1.2) * cfg.size.y };
+      x: opCfg.border.left,
+      y: opCfg.border.top + (0.2 + index * 1.2) * opCfg.size.y };
 
     // Update hovered
     this.hovered = mouseX > this.pos.x
@@ -206,12 +219,12 @@ class MenuOption {
       && mouseY < this.pos.y + this.size.y;
 
     // CLick functions
-    if (this.hovered && INPUT.mouse.clicked[LEFT]) this.click();
+    if (this.hovered && input.mouse.clicked[LEFT]) this.click();
 
     // Show option
     output.noFill();
-    if (!this.hovered) { output.stroke(CFG.mainColor); output.strokeWeight(2);
-    } else { output.stroke(CFG.hoverColor); output.strokeWeight(3); }
+    if (!this.hovered) { output.stroke(cfg.mainColor); output.strokeWeight(2);
+    } else { output.stroke(cfg.hoverColor); output.strokeWeight(3); }
     output.rect(this.pos.x, this.pos.y, this.size.x, this.size.y);
     output.strokeWeight(1);
   }
@@ -227,8 +240,8 @@ class GameOption extends MenuOption {
 
   // #region - Setup
 
-  constructor(menu_, cfg, id_, playerCount_) {
-    super(menu_, cfg);
+  constructor(menu_, opCfg, id_, playerCount_) {
+    super(menu_, opCfg);
 
     // Initialize variables
     this.id = id_;
@@ -240,13 +253,13 @@ class GameOption extends MenuOption {
 
   // #region - Main
 
-  draw(output, index, cfg) {
-    super.draw(output, index, cfg);
+  draw(output, index, opCfg) {
+    super.draw(output, index, opCfg);
 
     // Show id and playerCount
     output.textSize(this.size.y * 0.3);
     output.noStroke();
-    output.fill(CFG.mainColor);
+    output.fill(cfg.mainColor);
     output.textAlign(LEFT);
     output.text("Server ID: " + this.id, this.pos.x + 50, this.pos.y + this.size.y * 0.65);
     output.textAlign(RIGHT);
@@ -267,8 +280,8 @@ class HostOption extends MenuOption {
 
   // #region - Setup
 
-  constructor(menu_, cfg) {
-    super(menu_, cfg);
+  constructor(menu_, opCfg) {
+    super(menu_, opCfg);
   }
 
   // #endregion
@@ -276,13 +289,12 @@ class HostOption extends MenuOption {
 
   // #region - Main
 
-  draw(output, index, cfg) {
-    super.draw(output, index, cfg);
+  draw(output, index, opCfg) {
+    super.draw(output, index, opCfg);
 
     // Draw plus
-
     output.noStroke();
-    output.fill(CFG.mainColor);
+    output.fill(cfg.mainColor);
     output.rect(this.pos.x + this.size.x * 0.5 - 5, this.pos.y + this.size.y * 0.5 - 20, 10, 40);
     output.rect(this.pos.x + this.size.x * 0.5 - 20, this.pos.y + this.size.y * 0.5 - 5, 40, 10);
   }
@@ -297,30 +309,15 @@ class HostOption extends MenuOption {
 }
 
 
-class LoadGameState extends State {
+class LoadState extends State {
 
   // #region - Setup
 
-  constructor(tetris_, id_) {
+  constructor(tetris_, event_, response_) {
     super(tetris_);
 
-    // Send request to join game
-    socket.emit("requestJoin", { id: id_ });
-  }
-
-
-  _subscribeEventListeners() {
-    super._subscribeEventListeners();
-
-    // Recieved game join request response
-    this.subscribe(socket, "requestJoin", (data) => {
-
-      // Accepted into game
-      if (data.accepted) {
-        this.tetris.popState();
-        this.tetris.pushState(new GameState(this.tetris, data.id));
-      }
-    });
+    // Recieved response
+    this._subscribe(socket, event_, response_);
   }
 
   // #endregion
@@ -333,7 +330,7 @@ class LoadGameState extends State {
     output.textAlign(CENTER);
     output.textSize(60);
     output.noStroke();
-    output.fill(CFG.mainColor);
+    output.fill(cfg.mainColor);
     output.text("Loading...", width * 0.5, height * 0.5);
   }
 
@@ -359,14 +356,28 @@ class GameState extends State {
 
   draw(output) {
     // Enter game state
-    if (INPUT.keys.clicked[27]) this.leaveGame();
+    if (input.keys.clicked[27]) this.leaveGame();
   }
 
 
   leaveGame() {
     // Leave the current game
     socket.emit("requestLeave", { id: this.id });
-    this.tetris.popState();
+    this._tetris.popState();
+
+    // Send a request to join a game and load
+    this._tetris.pushState(new LoadState(this._tetris, "requestLeave", (data) => {
+
+      // Leaving game successfully
+      if (data.accepted) {
+        this._tetris.popState();
+
+      // Leaving game unsuccesfully
+      } else {
+        this._tetris.popState();
+        console.log("Leave game unsuccessful: " + data.reason);
+      }
+    }));
   }
 
   // #endregion

@@ -97,8 +97,8 @@ async function requestJoin(socket, data) {
   if (tetrisGames[data.id]) {
     console.log(socket.id + " requests join game " + data.id + ": accepted");
     tetrisGames[data.id].addPlayer(socket.id);
-    socket.emit("requestJoin", { id: data.id, accepted: true });
     getGameList(io);
+    socket.emit("requestJoin", { id: data.id, accepted: true });
 
   // Game doesnt exist
   } else {
@@ -114,10 +114,12 @@ function requestLeave(socket, data) {
     console.log(socket.id + " requests leave game " + data.id + ": accepted");
     tetrisGames[data.id].removePlayer(socket.id);
     getGameList(io);
+    socket.emit("requestLeave", { id: data.id, accepted: true });
 
   // Game doesnt exist
   } else {
     console.log(socket.id + " requests leave game " + data.id + ": game not found");
+    socket.emit("requestLeave", { id: data.id, accepted: false, reason: "No game found" });
   }
 }
 

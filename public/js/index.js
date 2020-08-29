@@ -1,10 +1,6 @@
 
-
-// Use bitwise operations for piece identification with sides / color
-
-
-// Declare global variables
-let INPUT = {
+// Declare variables
+let input = {
 
   setup() {
     // Declare and initialize variables
@@ -20,12 +16,12 @@ let INPUT = {
     window.mouseWheel = (e) => { this.mouseWheel = e.delta; }
   }
 };
-let CFG = {
+let cfg = {
 
   // Private getters and variables
+  currentConfig: "purple",
   _configs: [ "purple", "blue" ],
-  _currentConfig: "purple",
-  get _current() { return this["_" + this._currentConfig]; },
+  get _current() { return this["_" + this.currentConfig]; },
 
   // Public getter and variables
   get mainFont() { return this._current.mainFont; },
@@ -38,16 +34,16 @@ let CFG = {
   preload(name) {
     // Preload all assets used in configs
     if (name == null) {
-      for (let config of this.configs) {
-        if (!this[config].loaded) {
-          this["_" + config].mainFont = loadFont(this[config].mainFont);
+      for (let config of this._configs) {
+        if (!this["_" + config].loaded) {
+          this["_" + config].mainFont = loadFont(this["_" + config].mainFont);
           this["_" + config].loaded = true;
         }
       }
 
     // Preloads all assets used in specific config
     } else if (this.hasConfig(name)) {
-      if (!this["_" + name]._loaded) {
+      if (!this["_" + name].loaded) {
         this["_" + name].mainFont = loadFont(this["_" + name].mainFont);
         this["_" + name].loaded = true;
       }
@@ -58,7 +54,7 @@ let CFG = {
     // If exists sets the current config
     if (this.hasConfig(config)) {
       if (!this._configs._loaded) this.preload(config);
-      this._currentConfig = config;
+      this.currentConfig = config;
     }
   },
 
@@ -88,16 +84,14 @@ let CFG = {
     bloomStrength: 0.8
   }
 };
-
-// Declare variables
 let pp = new PostProcessor();
 let output, socket, tetris;
 
 
 function preload() {
   // Load assets
-  // CFG.preload();
-  pp.preload();
+  cfg.preload("purple");
+  pp.preload("bloom");
 }
 
 
@@ -105,19 +99,28 @@ function setup() {
   // Initialize canvas
   canv = createCanvas(600, 900);
   canv.parent("main");
+  canvas.style.width = (windowHeight * 0.6) + "px";
+  canvas.style.height = (windowHeight * 0.9) + "px";
 
   // Initialize variables
-  INPUT.setup();
-  pp.setup();
+  input.setup();
+  cfg.setConfig("purple");
+  pp.setup("bloom");
   output = createGraphics(600, 900);
   socket = io.connect();
   tetris = new Tetris();
 
   // Initial setup
-  CFG.setConfig("purple");
-  output.textFont(CFG.mainFont);
+  output.textFont(cfg.mainFont);
   output.noStroke();
   output.noFill();
+}
+
+
+function windowResized() {
+  // Keep canvas sizing correct
+  canvas.style.width = (windowHeight * 0.6) + "px";
+  canvas.style.height = (windowHeight * 0.9) + "px";
 }
 
 
@@ -130,5 +133,5 @@ function draw() {
 
   // Draw output and post process
   image(output, 0, 0, width, height);
-  pp.bloom(output, CFG.bloomRange, CFG.bloomStrength);
+  pp.bloom(output, cfg.bloomRange, cfg.bloomStrength);
 }
