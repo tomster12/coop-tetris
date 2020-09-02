@@ -1,5 +1,16 @@
 
 // Declare variables
+let assets = {
+
+  preload() {
+    // Preload all sounds
+    this.sounds = {};
+    this.sounds["hover"] = loadSound("./assets/sounds/scifiHover.mp3");
+    this.sounds["click"] = loadSound("./assets/sounds/lightClick.mp3");
+    this.sounds["dingle"] = loadSound("./assets/sounds/softDingle.mp3");
+    this.sounds["blip"] = loadSound("./assets/sounds/lightScifiBlip.mp3");
+  }
+};
 let input = {
 
   setup() {
@@ -14,6 +25,12 @@ let input = {
     window.mousePressed = () => { this.mouse.held[mouseButton] = true; this.mouse.clicked[mouseButton] = true; }
     window.mouseReleased = () => { this.mouse.held[mouseButton] = false; this.mouse.clicked[mouseButton] = false; }
     window.mouseWheel = (e) => { this.mouseWheel = e.delta; }
+  },
+
+  draw() {
+    // Update clicked
+    this.keys.clicked = {};
+    this.mouse.clicked = {};
   }
 };
 let cfg = {
@@ -27,7 +44,7 @@ let cfg = {
   get mainFont() { return this._current.mainFont; },
   get mainColor() { return this._current.mainColor; },
   get hoverColor() { return this._current.hoverColor; },
-  get pieceColors() { return this._current.pieceColors; },
+  get defaultPieceColor() { return this._current.defaultPieceColor; },
   get bloomRange() { return this._current.bloomRange; },
   get bloomStrength() { return this._current.bloomStrength; },
 
@@ -71,6 +88,7 @@ let cfg = {
     mainFont: "./assets/Montserrat-Regular.ttf",
     mainColor: "#d13ee9",
     hoverColor: "#ec7aff",
+    defaultPieceColor: "#ebebeb",
     bloomRange: 0.6,
     bloomStrength: 0.8
   },
@@ -81,6 +99,7 @@ let cfg = {
     mainFont: "./assets/Montserrat-Regular.ttf",
     mainColor: "#366eff",
     hoverColor: "#7196f6",
+    defaultPieceColor: "#ebebeb",
     bloomRange: 0.6,
     bloomStrength: 0.8
   }
@@ -91,6 +110,7 @@ let output, socket, tetris;
 
 function preload() {
   // Load assets
+  assets.preload();
   cfg.preload("purple");
   pp.preload("bloom");
 }
@@ -115,6 +135,7 @@ function setup() {
   output.textFont(cfg.mainFont);
   output.noStroke();
   output.noFill();
+  socket.on("debug", (data) => console.log(data));
 }
 
 
@@ -131,6 +152,9 @@ function draw() {
 
   // Tetris draw call
   tetris.draw(output);
+
+  // Update input
+  input.draw();
 
   // Draw output and post process
   image(output, 0, 0, width, height);
