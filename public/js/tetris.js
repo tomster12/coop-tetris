@@ -18,7 +18,7 @@ class Tetris {
 
   draw(output) {
     // Draw background
-    output.background("#090909");
+    background("#090909");
 
     // Draw current state
     this.getState().draw(output);

@@ -73,10 +73,10 @@ class PostProcessor {
     this.blurVPass.rect(0, 0, width, height);
 
     // Draw blurred blended ADD
-    push();
-    blendMode(ADD);
-    image(this.blurVPass, 0, 0, width, height);
-    pop();
+    output.push();
+    output.blendMode(ADD);
+    output.image(this.blurVPass, 0, 0, width, height);
+    output.pop();
   }
 
   // #endregion

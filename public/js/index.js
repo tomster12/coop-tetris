@@ -157,6 +157,9 @@ function draw() {
   input.draw();
 
   // Draw output and post process
-  image(output, 0, 0, width, height);
   pp.bloom(output, cfg.bloomRange, cfg.bloomStrength);
+  push();
+  blendMode(ADD);
+  image(output, 0, 0, width, height);
+  pop();
 }
